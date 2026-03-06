@@ -38,6 +38,58 @@ jobs:
             ninja-build \
             openjdk-17-jdk \
             openjdk-17-jre \
+            ant \
+            expect
+            
+      - name: Install Python packages
+        run: |
+          pip install --upgrade pip
+          pip install cython==0.29.36
+          pip install buildozer
+          
+      - name: Clean old builds
+        run: |
+          rm -rf /home/runner/.buildozer
+          rm -rf .buildozer
+          
+      - name: Accept Android SDK licenses globally
+        run: |
+          # Boş bir SDK dizini oluştur ve lisansları kabul et
+          mkdir -p /home/runner/.android
+          touch /home/runner/.android/repositories.cfg
+          
+          # Tüm olası lisansları kabul et
+          for i in {1..10}; do
+            echo "y" | sudo tee -a /home/runner/.android/licenses/accepted-licenses.txt
+          done
+          
+      - name: Build APK
+        run: |
+          # Buildozer'ın kendi SDK/NDK'sını indirmesine izin ver
+          buildozer android debug
+        env:
+          ANDROID_HOME: ""  # Boş bırak
+          ANDROID_NDK: ""   # Boş bırak
+          # Otomatik lisans kabulü için
+          SDKMANAGER_OPTS: "--licenses --accept-all"
+          
+      - name: Find and Upload APK
+        if: always()
+        run: |
+          # APK'yı bul
+          find . -name "*.apk" -exec cp {} ./ \;
+          mkdir -p artifacts
+          cp *.apk artifacts/ 2>/dev/null || echo "APK bulunamadı"
+          
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel-editor-apk
+          path: artifacts/*.apk
+          if-no-files-found: warn            ccache \
+            ninja-build \
+            openjdk-17-jdk \
+            openjdk-17-jre \
             ant
             
       - name: Install Python packages
