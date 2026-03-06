@@ -1,40 +1,103 @@
-name: Build APK
+name: Android Build
 on: [push]
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-
-      - name: Install system deps
+          python-version: '3.9'
+          
+      - name: Install system dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git zip unzip \
+          sudo apt update
+          sudo apt install -y \
+            git \
+            wget \
+            unzip \
+            python3-pip \
+            autoconf \
+            libtool \
+            pkg-config \
+            zlib1g-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            cmake \
+            libffi-dev \
+            libssl-dev \
+            libsdl2-dev \
+            libsdl2-image-dev \
+            libsdl2-mixer-dev \
+            libsdl2-ttf-dev \
+            ccache \
+            ninja-build \
             openjdk-17-jdk \
-            autoconf libtool pkg-config \
-            zlib1g-dev libncurses5-dev \
-            cmake libffi-dev libssl-dev \
-            libltdl-dev
-          sudo update-alternatives --set java /usr/lib/jvm/java-17-openjdk-amd64/bin/java
-          sudo update-alternatives --set javac /usr/lib/jvm/java-17-openjdk-amd64/bin/javac
-
-      - name: Install Python deps
+            openjdk-17-jre
+          
+      - name: Install Python packages
         run: |
           pip install --upgrade pip
-          pip install buildozer cython==0.29.33
-
+          pip install cython==0.29.36
+          pip install buildozer
+          # Pygame'in eski bir sürümünü yükleyin (Android için)
+          pip install pygame==2.0.1
+          
       - name: Setup Android SDK
-        env:
-          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
         run: |
-          mkdir -p $HOME/.android
-          echo "count=0" > $HOME/.android/repositories.cfg
+          # Android SDK kurulumu
+          mkdir -p $HOME/android-sdk
+          cd $HOME/android-sdk
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools-linux-9477386_latest.zip
+          mkdir -p cmdline-tools/latest
+          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+          
+          # SDK bileşenlerini yükle
+          export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+          
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
+          
+      - name: Setup Android NDK
+        run: |
+          # NDK r25c kurulumu
+          cd $HOME
+          wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          unzip -q android-ndk-r25c-linux.zip
+          echo "ANDROID_NDK_HOME=$HOME/android-ndk-r25c" >> $GITHUB_ENV
+          echo "ANDROIDNDK=$HOME/android-ndk-r25c" >> $GITHUB_ENV
+          
+      - name: Debug - Show environment
+        run: |
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
+          ls -la $ANDROID_HOME
+          ls -la $ANDROID_NDK_HOME
+          
+      - name: Build APK
+        run: |
+          # Buildozer ile build al
+          buildozer android debug 2>&1 | tee build.log
+          
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: bin/*.apk          echo "count=0" > $HOME/.android/repositories.cfg
           SDK=$HOME/.buildozer/android/platform/android-sdk
           mkdir -p $SDK/cmdline-tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdtools.zip
