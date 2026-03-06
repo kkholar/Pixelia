@@ -1,4 +1,4 @@
-name: Build APK with PGS4A
+name: Build APK
 on: [push]
 
 jobs:
@@ -12,7 +12,7 @@ jobs:
         with:
           python-version: '3.9'
           
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt update
           sudo apt install -y \
@@ -31,91 +31,29 @@ jobs:
             cmake \
             ninja-build \
             openjdk-17-jdk \
-            ant
+            ant \
+            ccache
             
-      - name: Install build tools
-        run: |
-          pip install --upgrade pip
-          pip install cython
-          pip install git+https://github.com/kivy/python-for-android.git
-          
-      - name: Setup Android SDK
-        run: |
-          mkdir -p $HOME/android-sdk
-          cd $HOME/android-sdk
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip -q commandlinetools-linux-9477386_latest.zip
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
-          
-          export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
-          
-      - name: Setup Android NDK
-        run: |
-          cd $HOME
-          wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
-          unzip -q android-ndk-r25c-linux.zip
-          
-      - name: Build APK with PGS4A
-        run: |
-          export ANDROID_HOME=$HOME/android-sdk
-          export ANDROID_NDK=$HOME/android-ndk-r25c
-          
-          # PGS4A ile build
-          p4a apk \
-            --private . \
-            --package=org.pixeleditor \
-            --name "Pixel Editor" \
-            --version 1.2 \
-            --bootstrap=sdl2 \
-            --requirements=python3,pgs4a \
-            --arch=arm64-v8a \
-            --sdk-dir $ANDROID_HOME \
-            --ndk-dir $ANDROID_NDK \
-            --android-api 33 \
-            --minsdk 21 \
-            --permission WRITE_EXTERNAL_STORAGE \
-            --permission READ_EXTERNAL_STORAGE \
-            --debug
-          
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: pixel-editor-apk
-          path: ./*.apk      - name: Install Python packages
+      - name: Install Python packages
         run: |
           pip install --upgrade pip
           pip install cython==0.29.36
           pip install buildozer
-          pip install pygame_sdl2  # Pygame_SDL2'yi yükle
           
-      - name: Setup Android SDK
+      - name: Clean everything
         run: |
-          mkdir -p $HOME/android-sdk
-          cd $HOME/android-sdk
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip -q commandlinetools-linux-9477386_latest.zip
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+          rm -rf ~/.buildozer
+          rm -rf .buildozer
+          rm -rf ~/.android
           
-          export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
-          
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-          
-      - name: Setup Android NDK
+      - name: Create Android directories
         run: |
-          cd $HOME
-          wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
-          unzip -q android-ndk-r25c-linux.zip
-          echo "ANDROID_NDK=$HOME/android-ndk-r25c" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$HOME/android-ndk-r25c" >> $GITHUB_ENV
+          mkdir -p ~/.android
+          # Lisansları kabul et
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > ~/.android/licenses/android-sdk-license
+          echo "84831b9409646a918e30573bab4c9c91346d8abd" > ~/.android/licenses/android-sdk-preview-license
           
-      - name: Update buildozer.spec for pygame_sdl2
+      - name: Create buildozer.spec
         run: |
           cat > buildozer.spec << 'EOF'
 [app]
@@ -126,8 +64,8 @@ source.dir = .
 source.include_exts = py,png,jpg,jpeg,ttf,txt
 version = 1.2
 
-# Pygame_SDL2 kullan
-requirements = python3, pygame_sdl2, sdl2, sdl2_image, sdl2_mixer, sdl2_ttf
+# Özel pygame branch'i
+requirements = python3, git+https://github.com/pygame/pygame.git@android, sdl2, sdl2_image, sdl2_mixer, sdl2_ttf
 
 orientation = portrait
 fullscreen = 1
@@ -136,10 +74,8 @@ android.api = 33
 android.minapi = 21
 android.archs = arm64-v8a
 
-# SDK ve NDK yolları
-android.sdk_path = $HOME/android-sdk
-android.ndk_path = $HOME/android-ndk-r25c
-android.ndk_version = 25c
+# Buildozer'ın kendi SDK/NDK'sını indirmesine izin ver
+# (bu satırları yorum yap veya sil)
 
 [buildozer]
 log_level = 2
@@ -147,10 +83,6 @@ EOF
           
       - name: Build APK
         run: |
-          export ANDROID_HOME=$HOME/android-sdk
-          export ANDROID_NDK=$HOME/android-ndk-r25c
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/build-tools/33.0.0
-          
           buildozer android debug
           
       - name: Upload APK
