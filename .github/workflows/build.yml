@@ -6,73 +6,48 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
+
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.9'  # 3.11 yerine 3.9 kullan
-          
-      - name: Install dependencies
+          python-version: '3.10'
+
+      - name: Install system deps
         run: |
-          sudo apt update
-          sudo apt install -y \
-            git \
-            wget \
-            unzip \
-            python3-pip \
-            python3-dev \
-            build-essential \
-            openjdk-17-jdk \
-            ant
-            
-      - name: Install python-for-android
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip \
+            autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev \
+            cmake libffi-dev libssl-dev \
+            libltdl-dev patch
+
+      - name: Install Python deps
         run: |
           pip install --upgrade pip
-          pip install cython==0.29.36  # Eski ama kararlı cython
-          pip install python-for-android
-          
-      - name: Setup Android SDK
+          pip install buildozer==1.4.0 cython==0.29.33
+
+      - name: Accept licenses and fix SDK
         run: |
-          mkdir -p $HOME/android-sdk
-          cd $HOME/android-sdk
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip -q commandlinetools-linux-9477386_latest.zip
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
-          
-          export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
-          
-      - name: Setup Android NDK
-        run: |
-          cd $HOME
-          wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
-          unzip -q android-ndk-r25c-linux.zip
-          
+          SDK=/usr/local/lib/android/sdk
+          yes | $SDK/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+          yes | $SDK/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" "platforms;android-33" 2>/dev/null || true
+          mkdir -p $SDK/tools/bin
+          ln -sf $SDK/cmdline-tools/latest/bin/sdkmanager $SDK/tools/bin/sdkmanager
+          ls $SDK/tools/bin/
+
       - name: Build APK
+        env:
+          JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/27.3.13750724
+          PATH: /usr/lib/jvm/temurin-17-jdk-amd64/bin:/usr/local/lib/android/sdk/cmdline-tools/latest/bin:/usr/local/lib/android/sdk/platform-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         run: |
-          export ANDROID_HOME=$HOME/android-sdk
-          export ANDROID_NDK=$HOME/android-ndk-r25c
-          
-          p4a apk \
-            --private . \
-            --package org.pixeleditor.pixeleditor \
-            --name "Pixel Editor" \
-            --version 1.2 \
-            --bootstrap sdl2 \
-            --requirements python3,pygame==2.0.1 \
-            --arch arm64-v8a \
-            --sdk-dir $ANDROID_HOME \
-            --ndk-dir $ANDROID_NDK \
-            --android-api 33 \
-            --minsdk 21 \
-            --permission WRITE_EXTERNAL_STORAGE \
-            --permission READ_EXTERNAL_STORAGE \
-            --debug
-          
+          buildozer -v android debug 2>&1
+
       - name: Upload APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pixel-editor-apk
-          path: ./*.apk
+          name: pixel-editor
+          path: bin/*.apk
