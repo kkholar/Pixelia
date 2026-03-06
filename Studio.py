@@ -1,4 +1,4 @@
-import pygame, sys, colorsys, copy, os, time
+import pygame_sdl2, sys, colorsys, copy, os, time
 pygame.init()
 
 info = pygame.display.Info()
