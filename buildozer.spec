@@ -1,21 +1,20 @@
-- name: Manual p4a build (alternative)
-  run: |
-    # Buildozer yerine direkt p4a kullan
-    pip install python-for-android
-    
-    p4a apk \
-      --private . \
-      --package=org.pixeleditor.pixeleditor \
-      --name "Pixel Editor" \
-      --version 1.2 \
-      --bootstrap=sdl2 \
-      --requirements=python3,pygame==2.0.1 \
-      --arch=arm64-v8a \
-      --sdk-dir /home/runner/.buildozer/android/platform/android-sdk \
-      --ndk-dir /home/runner/.buildozer/android/platform/android-ndk-r25c \
-      --ndk-version=25c \
-      --android-api=33 \
-      --minsdk=21 \
-      --permission=WRITE_EXTERNAL_STORAGE \
-      --permission=READ_EXTERNAL_STORAGE \
-      --debug
+[app]
+title = Pixel Editor
+package.name = pixeleditor
+package.domain = org.pixeleditor
+source.dir = .
+source.include_exts = py,png,jpg,jpeg,ttf,txt
+version = 1.2
+requirements = python3, pygame
+orientation = portrait
+fullscreen = 1
+android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
+android.api = 33
+android.minapi = 21
+android.archs = arm64-v8a
+android.sdk_path = /home/runner/.buildozer/android/platform/android-sdk
+android.ndk_path = /home/runner/.buildozer/android/platform/android-ndk-r25c
+android.ndk_version = 25c
+
+[buildozer]
+log_level = 2
