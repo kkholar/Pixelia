@@ -19,34 +19,30 @@ jobs:
             autoconf libtool pkg-config \
             zlib1g-dev libncurses5-dev \
             cmake libffi-dev libssl-dev \
-            libltdl-dev patch
+            libltdl-dev
 
       - name: Install Python deps
         run: |
           pip install --upgrade pip
-          pip install buildozer==1.4.0 cython==0.29.33
+          pip install buildozer cython==0.29.33
 
-      - name: Accept licenses and fix SDK
+      - name: Setup SDK and NDK
         run: |
           SDK=/usr/local/lib/android/sdk
-          yes | $SDK/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
-          yes | $SDK/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" "platforms;android-33" 2>/dev/null || true
           mkdir -p $SDK/tools/bin
           ln -sf $SDK/cmdline-tools/latest/bin/sdkmanager $SDK/tools/bin/sdkmanager
-          ls $SDK/tools/bin/
+          yes | $SDK/cmdline-tools/latest/bin/sdkmanager --licenses
+          yes | $SDK/cmdline-tools/latest/bin/sdkmanager "ndk;23.2.8568313"
 
       - name: Build APK
         env:
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/27.3.13750724
-          PATH: /usr/lib/jvm/temurin-17-jdk-amd64/bin:/usr/local/lib/android/sdk/cmdline-tools/latest/bin:/usr/local/lib/android/sdk/platform-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         run: |
-          buildozer -v android debug 2>&1
+          yes | buildozer android debug 2>&1
 
       - name: Upload APK
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pixel-editor
