@@ -22,70 +22,57 @@ jobs:
             python3-pip \
             python3-dev \
             build-essential \
-            autoconf \
-            libtool \
-            pkg-config \
-            zlib1g-dev \
-            libffi-dev \
-            libssl-dev \
-            cmake \
-            ninja-build \
             openjdk-17-jdk \
-            ant \
-            ccache
+            ant
             
-      - name: Install buildozer
+      - name: Install python-for-android
         run: |
           pip install --upgrade pip
-          pip install cython buildozer
+          pip install cython
+          pip install python-for-android
           
-      - name: Create buildozer.spec
+      - name: Setup Android SDK
         run: |
-          cat > buildozer.spec << 'EOF'
-[app]
-title = Pixel Editor
-package.name = pixeleditor
-package.domain = org.pixeleditor
-source.dir = .
-source.include_exts = py,png,jpg,jpeg,ttf,txt
-version = 1.2
-requirements = python3, pygame==2.0.1
-orientation = portrait
-fullscreen = 1
-android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
-android.api = 33
-android.minapi = 21
-android.archs = arm64-v8a
-
-[buildozer]
-log_level = 2
-EOF
-      
+          mkdir -p $HOME/android-sdk
+          cd $HOME/android-sdk
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools-linux-9477386_latest.zip
+          mkdir -p cmdline-tools/latest
+          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+          
+          export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+          
+      - name: Setup Android NDK
+        run: |
+          cd $HOME
+          wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          unzip -q android-ndk-r25c-linux.zip
+          
       - name: Build APK
         run: |
-          # Temizlik
-          rm -rf ~/.buildozer
-          rm -rf .buildozer
+          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_NDK=$HOME/android-ndk-r25c
           
-          # Build
-          buildozer android debug
+          p4a apk \
+            --private . \
+            --package org.pixeleditor.pixeleditor \
+            --name "Pixel Editor" \
+            --version 1.2 \
+            --bootstrap sdl2 \
+            --requirements python3,pygame==2.0.1 \
+            --arch arm64-v8a \
+            --sdk-dir $ANDROID_HOME \
+            --ndk-dir $ANDROID_NDK \
+            --android-api 33 \
+            --minsdk 21 \
+            --permission WRITE_EXTERNAL_STORAGE \
+            --permission READ_EXTERNAL_STORAGE \
+            --debug
           
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: pixel-editor-apk
-          path: bin/*.apk          # Buildozer container'ını çalıştır
-          docker run --rm \
-            -v $PWD:/home/user/workspace \
-            -v $PWD/.buildozer:/home/user/.buildozer \
-            -w /home/user/workspace \
-            --user user \
-            kivy/buildozer:latest \
-            android debug
-          
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: pixel-editor-apk
-          path: bin/*.apk
-        if-no-files-found: warn
+          path: ./*.apk
