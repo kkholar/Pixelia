@@ -7,15 +7,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Create buildozer.spec
+        run: |
+          cat > buildozer.spec << 'EOF'
+[app]
+title = Pixel Editor
+package.name = pixeleditor
+package.domain = org.pixeleditor
+source.dir = .
+source.include_exts = py,png,jpg,jpeg,ttf,txt
+version = 1.2
+requirements = python3, pygame
+orientation = portrait
+fullscreen = 1
+android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
+android.api = 33
+android.minapi = 21
+android.archs = arm64-v8a
+
+[buildozer]
+log_level = 2
+EOF
+      
       - name: Build with Docker
-        uses: ArtemSBulgakov/buildozer-action@v1
-        with:
-          workdir: .
-          command: buildozer android debug
-          buildozer_version: master
+        run: |
+          # Önceki container'ları temizle
+          docker system prune -f
+          
+          # Buildozer container'ını çalıştır
+          docker run --rm \
+            -v $PWD:/home/user/workspace \
+            -v $PWD/.buildozer:/home/user/.buildozer \
+            -w /home/user/workspace \
+            --user user \
+            kivy/buildozer:latest \
+            android debug
           
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: pixel-editor-apk
           path: bin/*.apk
+        if-no-files-found: warn
