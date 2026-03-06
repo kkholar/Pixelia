@@ -1,3 +1,4 @@
+buildozer.spec:
 [app]
 title = Pixel Editor
 package.name = pixeleditor
@@ -13,8 +14,8 @@ android.api = 33
 android.minapi = 21
 android.archs = arm64-v8a
 android.sdk_path = /usr/local/lib/android/sdk
-android.ndk_path = /usr/local/lib/android/sdk/ndk/27.3.13750724
-android.ndk_version = 27.3.13750724
+android.ndk_path = /usr/local/lib/android/sdk/ndk/23.2.8568313
+android.ndk_version = 23.2.8568313
 android.build_tools_version = 34.0.0
 
 [buildozer]
