@@ -1,4 +1,4 @@
-name: Build APK with Docker
+name: Build APK
 on: [push]
 
 jobs:
@@ -7,6 +7,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            git \
+            wget \
+            unzip \
+            python3-pip \
+            python3-dev \
+            build-essential \
+            autoconf \
+            libtool \
+            pkg-config \
+            zlib1g-dev \
+            libffi-dev \
+            libssl-dev \
+            cmake \
+            ninja-build \
+            openjdk-17-jdk \
+            ant \
+            ccache
+            
+      - name: Install buildozer
+        run: |
+          pip install --upgrade pip
+          pip install cython buildozer
+          
       - name: Create buildozer.spec
         run: |
           cat > buildozer.spec << 'EOF'
@@ -17,7 +49,7 @@ package.domain = org.pixeleditor
 source.dir = .
 source.include_exts = py,png,jpg,jpeg,ttf,txt
 version = 1.2
-requirements = python3, pygame
+requirements = python3, pygame==2.0.1
 orientation = portrait
 fullscreen = 1
 android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
@@ -29,12 +61,20 @@ android.archs = arm64-v8a
 log_level = 2
 EOF
       
-      - name: Build with Docker
+      - name: Build APK
         run: |
-          # Önceki container'ları temizle
-          docker system prune -f
+          # Temizlik
+          rm -rf ~/.buildozer
+          rm -rf .buildozer
           
-          # Buildozer container'ını çalıştır
+          # Build
+          buildozer android debug
+          
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel-editor-apk
+          path: bin/*.apk          # Buildozer container'ını çalıştır
           docker run --rm \
             -v $PWD:/home/user/workspace \
             -v $PWD/.buildozer:/home/user/.buildozer \
