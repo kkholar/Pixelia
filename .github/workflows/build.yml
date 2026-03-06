@@ -38,153 +38,6 @@ jobs:
             ninja-build \
             openjdk-17-jdk \
             openjdk-17-jre \
-            ant \
-            expect  # expect'i ekledik (otomatik lisans için)
-            
-      - name: Install Python packages
-        run: |
-          pip install --upgrade pip
-          pip install cython==0.29.36
-          pip install buildozer
-          
-      - name: Clean old builds
-        run: |
-          rm -rf /home/runner/.buildozer
-          rm -rf .buildozer
-          
-      - name: Setup Android SDK with automatic license acceptance
-        run: |
-          # SDK dizinini oluştur
-          mkdir -p /home/runner/.buildozer/android/platform/android-sdk
-          cd /home/runner/.buildozer/android/platform/android-sdk
-          
-          # Command line tools indir
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip -q commandlinetools-linux-9477386_latest.zip
-          
-          # Buildozer'ın beklediği yapıyı oluştur
-          mkdir -p tools
-          cp -r cmdline-tools/* tools/ 2>/dev/null || true
-          
-          # SDK manager'ı çalıştır ve lisansları otomatik kabul et
-          export PATH=$PATH:/home/runner/.buildozer/android/platform/android-sdk/tools/bin
-          
-          # Lisansları otomatik kabul et (yes komutu ile)
-          yes | /home/runner/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager --licenses
-          
-          # Gerekli bileşenleri yükle
-          /home/runner/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager \
-            "platform-tools" \
-            "platforms;android-33" \
-            "build-tools;33.0.0" \
-            "build-tools;34.0.0"
-          
-          # Başarılı kurulumu kontrol et
-          echo "SDK Kurulumu tamamlandı."
-          ls -la /home/runner/.buildozer/android/platform/android-sdk/build-tools/
-          
-      - name: Setup Android NDK
-        run: |
-          cd /home/runner/.buildozer/android/platform
-          
-          # NDK r25c (buildozer'ın önerdiği sürüm)
-          wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
-          unzip -q android-ndk-r25c-linux.zip
-          
-          echo "NDK Kurulumu tamamlandı."
-          
-      - name: Build APK
-        run: |
-          # Environment değişkenlerini ayarla
-          export ANDROID_HOME="/home/runner/.buildozer/android/platform/android-sdk"
-          export ANDROID_NDK="/home/runner/.buildozer/android/platform/android-ndk-r25c"
-          export PATH=$PATH:$ANDROID_HOME/tools/bin
-          
-          # Buildozer ile build al
-          buildozer android debug
-          
-      - name: Find and Upload APK
-        if: success() || failure()
-        run: |
-          echo "APK dosyaları aranıyor..."
-          
-          # APK'yı bul
-          APK_FILES=$(find . -name "*.apk" -type f)
-          
-          if [ -n "$APK_FILES" ]; then
-            echo "APK bulundu:"
-            echo "$APK_FILES"
-            mkdir -p artifacts
-            cp $APK_FILES artifacts/
-          else
-            echo "APK bulunamadı! Dizin yapısı:"
-            find . -type d | head -20
-            echo "Build çıktısı:"
-            ls -la bin/ 2>/dev/null || echo "bin dizini yok"
-            ls -la .buildozer/ 2>/dev/null || echo ".buildozer dizini yok"
-          fi
-          
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: pixel-editor-apk
-          path: artifacts/*.apk
-          if-no-files-found: warn            ccache \
-            ninja-build \
-            openjdk-17-jdk \
-            openjdk-17-jre \
-            ant \
-            expect
-            
-      - name: Install Python packages
-        run: |
-          pip install --upgrade pip
-          pip install cython==0.29.36
-          pip install buildozer
-          
-      - name: Clean old builds
-        run: |
-          rm -rf /home/runner/.buildozer
-          rm -rf .buildozer
-          
-      - name: Accept Android SDK licenses globally
-        run: |
-          # Boş bir SDK dizini oluştur ve lisansları kabul et
-          mkdir -p /home/runner/.android
-          touch /home/runner/.android/repositories.cfg
-          
-          # Tüm olası lisansları kabul et
-          for i in {1..10}; do
-            echo "y" | sudo tee -a /home/runner/.android/licenses/accepted-licenses.txt
-          done
-          
-      - name: Build APK
-        run: |
-          # Buildozer'ın kendi SDK/NDK'sını indirmesine izin ver
-          buildozer android debug
-        env:
-          ANDROID_HOME: ""  # Boş bırak
-          ANDROID_NDK: ""   # Boş bırak
-          # Otomatik lisans kabulü için
-          SDKMANAGER_OPTS: "--licenses --accept-all"
-          
-      - name: Find and Upload APK
-        if: always()
-        run: |
-          # APK'yı bul
-          find . -name "*.apk" -exec cp {} ./ \;
-          mkdir -p artifacts
-          cp *.apk artifacts/ 2>/dev/null || echo "APK bulunamadı"
-          
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: pixel-editor-apk
-          path: artifacts/*.apk
-          if-no-files-found: warn            ccache \
-            ninja-build \
-            openjdk-17-jdk \
-            openjdk-17-jre \
             ant
             
       - name: Install Python packages
@@ -197,17 +50,65 @@ jobs:
         run: |
           rm -rf /home/runner/.buildozer
           rm -rf .buildozer
+          rm -rf /home/runner/.android
           
-      - name: Build APK (Buildozer SDK/NDK indirsin)
+      - name: Create Android license directories
         run: |
-          # Buildozer'ın kendi SDK/NDK'sını indirmesine izin ver
-          buildozer android debug
-        env:
-          ANDROID_HOME: ""  # Boş bırak, buildozer kendi SDK'sını indirsin
-          ANDROID_NDK: ""   # Boş bırak, buildozer kendi NDK'sını indirsin
+          # Android lisans dizinlerini oluştur
+          mkdir -p /home/runner/.android
+          mkdir -p /home/runner/.android/licenses
+          
+      - name: Accept Android SDK licenses
+        run: |
+          # Tüm Android lisanslarını kabul et
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > /home/runner/.android/licenses/android-sdk-license
+          echo "84831b9409646a918e30573bab4c9c91346d8abd" > /home/runner/.android/licenses/android-sdk-preview-license
+          echo "d975f751698a77b662f1254ddbeed3901e976f5a" > /home/runner/.android/licenses/intel-android-extras-license
+          echo "dbbf0764871016bb587805d2b624cfcd74a5e2b3" > /home/runner/.android/licenses/android-googletv-license
+          
+          # Alternatif yöntem - tüm olası lisansları kabul et
+          for i in {1..10}; do
+            echo "y" >> /home/runner/.android/licenses/accepted-licenses.txt
+          done
+          
+      - name: Build APK
+        run: |
+          # Buildozer ile build al
+          buildozer android debug || true
+          
+      - name: Find and Save APK
+        if: always()
+        run: |
+          echo "APK dosyaları aranıyor..."
+          
+          # APK'yı bul
+          APK_FILES=$(find /home/runner -name "*.apk" -type f 2>/dev/null || true)
+          
+          if [ -n "$APK_FILES" ]; then
+            echo "APK bulundu:"
+            echo "$APK_FILES"
+            mkdir -p artifacts
+            for apk in $APK_FILES; do
+              cp "$apk" artifacts/
+            done
+            echo "APK_MEVCUT=true" >> $GITHUB_ENV
+          else
+            echo "APK bulunamadı! Dizin yapısı:"
+            ls -la .buildozer/ 2>/dev/null || echo ".buildozer dizini yok"
+            ls -la bin/ 2>/dev/null || echo "bin dizini yok"
+            echo "APK_MEVCUT=false" >> $GITHUB_ENV
+          fi
           
       - name: Upload APK
+        if: env.APK_MEVCUT == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: pixel-editor-apk
-          path: bin/*.apk
+          path: artifacts/*.apk
+          
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
