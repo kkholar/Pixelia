@@ -10,7 +10,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'  # 3.10 yerine 3.9 daha kararlı
+          python-version: '3.9'
           
       - name: Install system dependencies
         run: |
@@ -37,19 +37,17 @@ jobs:
             ccache \
             ninja-build \
             openjdk-17-jdk \
-            openjdk-17-jre \
-            ant
-            
+            openjdk-17-jre
+          
       - name: Install Python packages
         run: |
           pip install --upgrade pip
           pip install cython==0.29.36
           pip install buildozer
-          pip install pygame==2.0.1  # Belirli sürüm
           
-      - name: Setup Android SDK (doğru yöntem)
+      - name: Setup Android SDK
         run: |
-          # SDK'yı doğrudan buildozer'ın beklediği yere kuralım
+          # SDK'yı buildozer'ın beklediği yere kur
           mkdir -p /home/runner/.buildozer/android/platform/android-sdk
           cd /home/runner/.buildozer/android/platform
           
@@ -59,62 +57,27 @@ jobs:
           mkdir -p android-sdk/cmdline-tools
           mv cmdline-tools android-sdk/cmdline-tools/latest
           
-          # Environment değişkenlerini ayarla
+          # Environment değişkenleri
           export ANDROID_HOME=/home/runner/.buildozer/android/platform/android-sdk
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           
-          # SDK bileşenlerini yükle
+          # SDK bileşenleri
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
-          
-          # GitHub env'e ekle
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
           
       - name: Setup Android NDK
         run: |
           cd /home/runner/.buildozer/android/platform
           
-          # NDK r25c (daha kararlı)
+          # NDK r25c
           wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
           unzip -q android-ndk-r25c-linux.zip
           
-          export ANDROID_NDK=/home/runner/.buildozer/android/platform/android-ndk-r25c
-          export ANDROID_NDK_HOME=$ANDROID_NDK
-          
-          echo "ANDROID_NDK=$ANDROID_NDK" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK" >> $GITHUB_ENV
-          
-      - name: Update buildozer.spec
-        run: |
-          # buildozer.spec'teki yolları güncelle
-          sed -i 's|android.sdk_path = .*|android.sdk_path = /home/runner/.buildozer/android/platform/android-sdk|' buildozer.spec
-          sed -i 's|android.ndk_path = .*|android.ndk_path = /home/runner/.buildozer/android/platform/android-ndk-r25c|' buildozer.spec
-          sed -i 's|android.ndk_version = .*|android.ndk_version = 25c|' buildozer.spec
-          
-          # p4a.bootstrap ekle (deprecated uyarısı için)
-          echo "p4a.bootstrap = sdl2" >> buildozer.spec
-          
-      - name: Debug - Check environment
-        run: |
-          echo "ANDROID_HOME: $ANDROID_HOME"
-          echo "ANDROID_NDK: $ANDROID_NDK"
-          ls -la $ANDROID_HOME
-          ls -la $ANDROID_NDK
-          
       - name: Build APK
         run: |
-          buildozer android debug 2>&1 | tee build.log
-          
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
+          buildozer android debug
           
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: pixel-editor-apk
