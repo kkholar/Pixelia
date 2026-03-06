@@ -21,68 +21,120 @@ jobs:
             unzip \
             python3-pip \
             python3-dev \
+            build-essential \
             autoconf \
             libtool \
             pkg-config \
             zlib1g-dev \
-            libncurses5-dev \
-            libncursesw5-dev \
-            cmake \
             libffi-dev \
             libssl-dev \
-            libsdl2-dev \
-            libsdl2-image-dev \
-            libsdl2-mixer-dev \
-            libsdl2-ttf-dev \
-            ccache \
+            cmake \
             ninja-build \
             openjdk-17-jdk \
             openjdk-17-jre \
-            ant
-            
+            ant \
+            expect
+          
       - name: Install Python packages
         run: |
           pip install --upgrade pip
           pip install cython==0.29.36
           pip install buildozer
           
-      - name: Clean old builds
+      - name: Setup Android SDK (Manual)
         run: |
-          rm -rf /home/runner/.buildozer
-          rm -rf .buildozer
-          rm -rf /home/runner/.android
+          # SDK dizinini oluştur
+          mkdir -p $HOME/android-sdk
+          cd $HOME/android-sdk
           
-      - name: Create Android license directories
+          # Command line tools indir
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools-linux-9477386_latest.zip
+          
+          # Doğru dizin yapısını oluştur
+          mkdir -p cmdline-tools
+          mv cmdline-tools cmdline-tools/latest 2>/dev/null || true
+          
+          # PATH'e ekle
+          export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
+          
+          # Lisansları kabul et
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+          
+          # Gerekli bileşenleri yükle - ÖNEMLİ: build-tools 33.0.0
+          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+            "platform-tools" \
+            "platforms;android-33" \
+            "build-tools;33.0.0" \
+            "build-tools;30.0.3"
+          
+          # Environment değişkenlerini ayarla
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+          
+          # Kurulumu kontrol et
+          echo "Build-tools kontrolü:"
+          ls -la $HOME/android-sdk/build-tools/ || echo "build-tools dizini yok"
+          
+      - name: Setup Android NDK
         run: |
-          # Android lisans dizinlerini oluştur
-          mkdir -p /home/runner/.android
-          mkdir -p /home/runner/.android/licenses
+          cd $HOME
           
-      - name: Accept Android SDK licenses
+          # NDK r25c
+          wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          unzip -q android-ndk-r25c-linux.zip
+          
+          # NDK environment
+          echo "ANDROID_NDK=$HOME/android-ndk-r25c" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$HOME/android-ndk-r25c" >> $GITHUB_ENV
+          echo "$HOME/android-ndk-r25c" >> $GITHUB_PATH
+          
+      - name: Update buildozer.spec
         run: |
-          # Tüm Android lisanslarını kabul et
-          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > /home/runner/.android/licenses/android-sdk-license
-          echo "84831b9409646a918e30573bab4c9c91346d8abd" > /home/runner/.android/licenses/android-sdk-preview-license
-          echo "d975f751698a77b662f1254ddbeed3901e976f5a" > /home/runner/.android/licenses/intel-android-extras-license
-          echo "dbbf0764871016bb587805d2b624cfcd74a5e2b3" > /home/runner/.android/licenses/android-googletv-license
-          
-          # Alternatif yöntem - tüm olası lisansları kabul et
-          for i in {1..10}; do
-            echo "y" >> /home/runner/.android/licenses/accepted-licenses.txt
-          done
+          # buildozer.spec'i güncelle
+          cat > buildozer.spec << 'EOF'
+[app]
+title = Pixel Editor
+package.name = pixeleditor
+package.domain = org.pixeleditor
+source.dir = .
+source.include_exts = py,png,jpg,jpeg,ttf,txt
+version = 1.2
+requirements = python3, pygame
+orientation = portrait
+fullscreen = 1
+android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
+android.api = 33
+android.minapi = 21
+android.archs = arm64-v8a
+
+# SDK ve NDK yollarını kaldır - buildozer kendi bulsun
+# android.sdk_path = 
+# android.ndk_path = 
+
+[buildozer]
+log_level = 2
+EOF
           
       - name: Build APK
         run: |
-          # Buildozer ile build al
-          buildozer android debug || true
+          # Buildozer'ın SDK'yı bulması için environment
+          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_NDK=$HOME/android-ndk-r25c
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/build-tools/33.0.0
           
-      - name: Find and Save APK
+          # Build
+          buildozer android debug
+          
+      - name: Find and Upload APK
         if: always()
         run: |
           echo "APK dosyaları aranıyor..."
           
           # APK'yı bul
-          APK_FILES=$(find /home/runner -name "*.apk" -type f 2>/dev/null || true)
+          APK_FILES=$(find $HOME -name "*.apk" -type f 2>/dev/null || true)
           
           if [ -n "$APK_FILES" ]; then
             echo "APK bulundu:"
@@ -93,10 +145,10 @@ jobs:
             done
             echo "APK_MEVCUT=true" >> $GITHUB_ENV
           else
-            echo "APK bulunamadı! Dizin yapısı:"
-            ls -la .buildozer/ 2>/dev/null || echo ".buildozer dizini yok"
+            echo "APK bulunamadı!"
+            echo "Build çıktısı:"
             ls -la bin/ 2>/dev/null || echo "bin dizini yok"
-            echo "APK_MEVCUT=false" >> $GITHUB_ENV
+            ls -la .buildozer/ 2>/dev/null || echo ".buildozer dizini yok"
           fi
           
       - name: Upload APK
@@ -105,10 +157,3 @@ jobs:
         with:
           name: pixel-editor-apk
           path: artifacts/*.apk
-          
-      - name: Upload build log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
