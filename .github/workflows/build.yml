@@ -1,61 +1,6 @@
-name: Build APK
-on: [push]
-
-jobs:
-  build:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-          
-      - name: Install system dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y \
-            git \
-            wget \
-            unzip \
-            python3-pip \
-            python3-dev \
-            build-essential \
-            autoconf \
-            libtool \
-            pkg-config \
-            zlib1g-dev \
-            libffi-dev \
-            libssl-dev \
-            cmake \
-            ninja-build \
-            openjdk-17-jdk \
-            ant \
-            ccache
-            
-      - name: Install Python packages
-        run: |
-          pip install --upgrade pip
-          pip install cython==0.29.36
-          pip install buildozer
-          
-      - name: Clean everything
-        run: |
-          rm -rf ~/.buildozer
-          rm -rf .buildozer
-          rm -rf ~/.android
-          
-      - name: Create Android directories
-        run: |
-          mkdir -p ~/.android
-          # Lisansları kabul et
-          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > ~/.android/licenses/android-sdk-license
-          echo "84831b9409646a918e30573bab4c9c91346d8abd" > ~/.android/licenses/android-sdk-preview-license
-          
-      - name: Create buildozer.spec
-        run: |
-          cat > buildozer.spec << 'EOF'
+- name: Create buildozer.spec with stable pygame
+  run: |
+    cat > buildozer.spec << 'EOF'
 [app]
 title = Pixel Editor
 package.name = pixeleditor
@@ -64,8 +9,8 @@ source.dir = .
 source.include_exts = py,png,jpg,jpeg,ttf,txt
 version = 1.2
 
-# Özel pygame branch'i
-requirements = python3, git+https://github.com/pygame/pygame.git@android, sdl2, sdl2_image, sdl2_mixer, sdl2_ttf
+# Eski ama kararlı pygame sürümü
+requirements = python3, pygame==2.0.1, sdl2==2.0.20
 
 orientation = portrait
 fullscreen = 1
@@ -74,19 +19,9 @@ android.api = 33
 android.minapi = 21
 android.archs = arm64-v8a
 
-# Buildozer'ın kendi SDK/NDK'sını indirmesine izin ver
-# (bu satırları yorum yap veya sil)
+# Özel p4a branch'i
+p4a.branch = develop
 
 [buildozer]
 log_level = 2
 EOF
-          
-      - name: Build APK
-        run: |
-          buildozer android debug
-          
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: pixel-editor-apk
-          path: bin/*.apk
