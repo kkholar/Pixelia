@@ -1,16 +1,16 @@
-name: Android Build
+name: Build APK
 on: [push]
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.9'  # 3.10 yerine 3.9 daha kararlı
           
       - name: Install system dependencies
         run: |
@@ -20,6 +20,7 @@ jobs:
             wget \
             unzip \
             python3-pip \
+            python3-dev \
             autoconf \
             libtool \
             pkg-config \
@@ -36,57 +37,77 @@ jobs:
             ccache \
             ninja-build \
             openjdk-17-jdk \
-            openjdk-17-jre
-          
+            openjdk-17-jre \
+            ant
+            
       - name: Install Python packages
         run: |
           pip install --upgrade pip
           pip install cython==0.29.36
           pip install buildozer
-          # Pygame'in eski bir sürümünü yükleyin (Android için)
-          pip install pygame==2.0.1
+          pip install pygame==2.0.1  # Belirli sürüm
           
-      - name: Setup Android SDK
+      - name: Setup Android SDK (doğru yöntem)
         run: |
-          # Android SDK kurulumu
-          mkdir -p $HOME/android-sdk
-          cd $HOME/android-sdk
+          # SDK'yı doğrudan buildozer'ın beklediği yere kuralım
+          mkdir -p /home/runner/.buildozer/android/platform/android-sdk
+          cd /home/runner/.buildozer/android/platform
+          
+          # Command line tools indir
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           unzip -q commandlinetools-linux-9477386_latest.zip
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+          mkdir -p android-sdk/cmdline-tools
+          mv cmdline-tools android-sdk/cmdline-tools/latest
+          
+          # Environment değişkenlerini ayarla
+          export ANDROID_HOME=/home/runner/.buildozer/android/platform/android-sdk
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           
           # SDK bileşenlerini yükle
-          export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
           
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
+          # GitHub env'e ekle
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
           
       - name: Setup Android NDK
         run: |
-          # NDK r25c kurulumu
-          cd $HOME
+          cd /home/runner/.buildozer/android/platform
+          
+          # NDK r25c (daha kararlı)
           wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
           unzip -q android-ndk-r25c-linux.zip
-          echo "ANDROID_NDK_HOME=$HOME/android-ndk-r25c" >> $GITHUB_ENV
-          echo "ANDROIDNDK=$HOME/android-ndk-r25c" >> $GITHUB_ENV
           
-      - name: Debug - Show environment
+          export ANDROID_NDK=/home/runner/.buildozer/android/platform/android-ndk-r25c
+          export ANDROID_NDK_HOME=$ANDROID_NDK
+          
+          echo "ANDROID_NDK=$ANDROID_NDK" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK" >> $GITHUB_ENV
+          
+      - name: Update buildozer.spec
+        run: |
+          # buildozer.spec'teki yolları güncelle
+          sed -i 's|android.sdk_path = .*|android.sdk_path = /home/runner/.buildozer/android/platform/android-sdk|' buildozer.spec
+          sed -i 's|android.ndk_path = .*|android.ndk_path = /home/runner/.buildozer/android/platform/android-ndk-r25c|' buildozer.spec
+          sed -i 's|android.ndk_version = .*|android.ndk_version = 25c|' buildozer.spec
+          
+          # p4a.bootstrap ekle (deprecated uyarısı için)
+          echo "p4a.bootstrap = sdl2" >> buildozer.spec
+          
+      - name: Debug - Check environment
         run: |
           echo "ANDROID_HOME: $ANDROID_HOME"
-          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
+          echo "ANDROID_NDK: $ANDROID_NDK"
           ls -la $ANDROID_HOME
-          ls -la $ANDROID_NDK_HOME
+          ls -la $ANDROID_NDK
           
       - name: Build APK
         run: |
-          # Buildozer ile build al
           buildozer android debug 2>&1 | tee build.log
           
-      - name: Upload build log on failure
-        if: failure()
+      - name: Upload build log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
@@ -96,29 +117,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: bin/*.apk          echo "count=0" > $HOME/.android/repositories.cfg
-          SDK=$HOME/.buildozer/android/platform/android-sdk
-          mkdir -p $SDK/cmdline-tools
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdtools.zip
-          unzip -q cmdtools.zip -d $SDK/cmdline-tools
-          mv $SDK/cmdline-tools/cmdline-tools $SDK/cmdline-tools/latest
-          export PATH=$PATH:$SDK/cmdline-tools/latest/bin
-          yes | sdkmanager --licenses
-          yes | sdkmanager "build-tools;34.0.0" "platform-tools" "platforms;android-33"
-          mkdir -p $SDK/tools/bin
-          ln -sf $SDK/cmdline-tools/latest/bin/sdkmanager $SDK/tools/bin/sdkmanager
-
-      - name: Build APK
-        env:
-          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
-          ANDROID_SDK_ROOT: /home/runner/.buildozer/android/platform/android-sdk
-          ANDROID_HOME: /home/runner/.buildozer/android/platform/android-sdk
-        run: |
-          yes | buildozer android debug 2>&1
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: pixel-editor
+          name: pixel-editor-apk
           path: bin/*.apk
