@@ -10,7 +10,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.9'  # 3.11 yerine 3.9 kullan
           
       - name: Install dependencies
         run: |
@@ -28,7 +28,7 @@ jobs:
       - name: Install python-for-android
         run: |
           pip install --upgrade pip
-          pip install cython
+          pip install cython==0.29.36  # Eski ama kararlı cython
           pip install python-for-android
           
       - name: Setup Android SDK
