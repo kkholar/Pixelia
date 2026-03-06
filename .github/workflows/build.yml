@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK with p4a
 on: [push]
 
 jobs:
@@ -12,7 +12,7 @@ jobs:
         with:
           python-version: '3.9'
           
-      - name: Install system dependencies
+      - name: Install dependencies
         run: |
           sudo apt update
           sudo apt install -y \
@@ -31,129 +31,63 @@ jobs:
             cmake \
             ninja-build \
             openjdk-17-jdk \
-            openjdk-17-jre \
-            ant \
-            expect
-          
+            ant
+            
       - name: Install Python packages
         run: |
           pip install --upgrade pip
-          pip install cython==0.29.36
-          pip install buildozer
+          pip install cython
+          pip install python-for-android
           
-      - name: Setup Android SDK (Manual)
+      - name: Setup Android SDK
         run: |
-          # SDK dizinini oluştur
           mkdir -p $HOME/android-sdk
           cd $HOME/android-sdk
-          
-          # Command line tools indir
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           unzip -q commandlinetools-linux-9477386_latest.zip
+          mkdir -p cmdline-tools/latest
+          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
           
-          # Doğru dizin yapısını oluştur
-          mkdir -p cmdline-tools
-          mv cmdline-tools cmdline-tools/latest 2>/dev/null || true
-          
-          # PATH'e ekle
           export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
           
-          # Lisansları kabul et
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
-          
-          # Gerekli bileşenleri yükle - ÖNEMLİ: build-tools 33.0.0
-          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
-            "platform-tools" \
-            "platforms;android-33" \
-            "build-tools;33.0.0" \
-            "build-tools;30.0.3"
-          
-          # Environment değişkenlerini ayarla
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
-          
-          # Kurulumu kontrol et
-          echo "Build-tools kontrolü:"
-          ls -la $HOME/android-sdk/build-tools/ || echo "build-tools dizini yok"
           
       - name: Setup Android NDK
         run: |
           cd $HOME
-          
-          # NDK r25c
           wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
           unzip -q android-ndk-r25c-linux.zip
-          
-          # NDK environment
           echo "ANDROID_NDK=$HOME/android-ndk-r25c" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$HOME/android-ndk-r25c" >> $GITHUB_ENV
-          echo "$HOME/android-ndk-r25c" >> $GITHUB_PATH
           
-      - name: Update buildozer.spec
+      - name: Build APK with p4a
         run: |
-          # buildozer.spec'i güncelle
-          cat > buildozer.spec << 'EOF'
-[app]
-title = Pixel Editor
-package.name = pixeleditor
-package.domain = org.pixeleditor
-source.dir = .
-source.include_exts = py,png,jpg,jpeg,ttf,txt
-version = 1.2
-requirements = python3, pygame
-orientation = portrait
-fullscreen = 1
-android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
-android.api = 33
-android.minapi = 21
-android.archs = arm64-v8a
-
-# SDK ve NDK yollarını kaldır - buildozer kendi bulsun
-# android.sdk_path = 
-# android.ndk_path = 
-
-[buildozer]
-log_level = 2
-EOF
-          
-      - name: Build APK
-        run: |
-          # Buildozer'ın SDK'yı bulması için environment
           export ANDROID_HOME=$HOME/android-sdk
           export ANDROID_NDK=$HOME/android-ndk-r25c
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/build-tools/33.0.0
+          export PATH=$PATH:$ANDROID_HOME/build-tools/33.0.0
           
-          # Build
-          buildozer android debug
-          
-      - name: Find and Upload APK
-        if: always()
-        run: |
-          echo "APK dosyaları aranıyor..."
-          
-          # APK'yı bul
-          APK_FILES=$(find $HOME -name "*.apk" -type f 2>/dev/null || true)
-          
-          if [ -n "$APK_FILES" ]; then
-            echo "APK bulundu:"
-            echo "$APK_FILES"
-            mkdir -p artifacts
-            for apk in $APK_FILES; do
-              cp "$apk" artifacts/
-            done
-            echo "APK_MEVCUT=true" >> $GITHUB_ENV
-          else
-            echo "APK bulunamadı!"
-            echo "Build çıktısı:"
-            ls -la bin/ 2>/dev/null || echo "bin dizini yok"
-            ls -la .buildozer/ 2>/dev/null || echo ".buildozer dizini yok"
-          fi
+          p4a apk \
+            --private . \
+            --package=org.pixeleditor.pixeleditor \
+            --name "Pixel Editor" \
+            --version 1.2 \
+            --bootstrap=sdl2 \
+            --requirements=python3,pygame \
+            --arch=arm64-v8a \
+            --sdk-dir $ANDROID_HOME \
+            --ndk-dir $ANDROID_NDK \
+            --android-api 33 \
+            --minsdk 21 \
+            --permission WRITE_EXTERNAL_STORAGE \
+            --permission READ_EXTERNAL_STORAGE \
+            --debug
           
       - name: Upload APK
-        if: env.APK_MEVCUT == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: pixel-editor-apk
-          path: artifacts/*.apk
+          path: ./*.apk
