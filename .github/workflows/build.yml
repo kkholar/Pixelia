@@ -21,6 +21,9 @@ jobs:
             zlib1g-dev libncurses5-dev \
             cmake libffi-dev libssl-dev \
             libltdl-dev
+          sudo update-alternatives --set java /usr/lib/jvm/java-17-openjdk-amd64/bin/java
+          sudo update-alternatives --set javac /usr/lib/jvm/java-17-openjdk-amd64/bin/javac
+          java -version
 
       - name: Install Python deps
         run: |
@@ -28,22 +31,23 @@ jobs:
           pip install buildozer cython==0.29.33
 
       - name: Setup Android SDK
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
         run: |
           mkdir -p $HOME/.android
           echo "count=0" > $HOME/.android/repositories.cfg
-          # cmdline-tools indir
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdtools.zip
           mkdir -p $HOME/.buildozer/android/platform/android-sdk/cmdline-tools
           unzip -q cmdtools.zip -d $HOME/.buildozer/android/platform/android-sdk/cmdline-tools
           mv $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/cmdline-tools \
              $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest
           export PATH=$PATH:$HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin
-          # Lisansları kabul et
           yes | sdkmanager --licenses
-          # build-tools ve platform-tools kur
           yes | sdkmanager "build-tools;34.0.0" "platform-tools" "platforms;android-33"
 
       - name: Build APK
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
         run: |
           yes | buildozer android debug 2>&1
 
