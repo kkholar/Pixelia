@@ -1,27 +1,20 @@
-- name: Create buildozer.spec with stable pygame
-  run: |
-    cat > buildozer.spec << 'EOF'
-[app]
-title = Pixel Editor
-package.name = pixeleditor
-package.domain = org.pixeleditor
-source.dir = .
-source.include_exts = py,png,jpg,jpeg,ttf,txt
-version = 1.2
+name: Build APK with Docker
+on: [push]
 
-# Eski ama kararlı pygame sürümü
-requirements = python3, pygame==2.0.1, sdl2==2.0.20
-
-orientation = portrait
-fullscreen = 1
-android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
-android.api = 33
-android.minapi = 21
-android.archs = arm64-v8a
-
-# Özel p4a branch'i
-p4a.branch = develop
-
-[buildozer]
-log_level = 2
-EOF
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build with Docker
+        uses: ArtemSBulgakov/buildozer-action@v1
+        with:
+          workdir: .
+          buildozer_cmd: buildozer android debug
+          
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel-editor-apk
+          path: bin/*.apk
