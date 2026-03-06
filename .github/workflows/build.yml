@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK with PGS4A
 on: [push]
 
 jobs:
@@ -12,7 +12,7 @@ jobs:
         with:
           python-version: '3.9'
           
-      - name: Install system dependencies
+      - name: Install dependencies
         run: |
           sudo apt update
           sudo apt install -y \
@@ -31,10 +31,60 @@ jobs:
             cmake \
             ninja-build \
             openjdk-17-jdk \
-            ant \
-            ccache
+            ant
             
-      - name: Install Python packages
+      - name: Install build tools
+        run: |
+          pip install --upgrade pip
+          pip install cython
+          pip install git+https://github.com/kivy/python-for-android.git
+          
+      - name: Setup Android SDK
+        run: |
+          mkdir -p $HOME/android-sdk
+          cd $HOME/android-sdk
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools-linux-9477386_latest.zip
+          mkdir -p cmdline-tools/latest
+          mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+          
+          export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+          
+      - name: Setup Android NDK
+        run: |
+          cd $HOME
+          wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          unzip -q android-ndk-r25c-linux.zip
+          
+      - name: Build APK with PGS4A
+        run: |
+          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_NDK=$HOME/android-ndk-r25c
+          
+          # PGS4A ile build
+          p4a apk \
+            --private . \
+            --package=org.pixeleditor \
+            --name "Pixel Editor" \
+            --version 1.2 \
+            --bootstrap=sdl2 \
+            --requirements=python3,pgs4a \
+            --arch=arm64-v8a \
+            --sdk-dir $ANDROID_HOME \
+            --ndk-dir $ANDROID_NDK \
+            --android-api 33 \
+            --minsdk 21 \
+            --permission WRITE_EXTERNAL_STORAGE \
+            --permission READ_EXTERNAL_STORAGE \
+            --debug
+          
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel-editor-apk
+          path: ./*.apk      - name: Install Python packages
         run: |
           pip install --upgrade pip
           pip install cython==0.29.36
